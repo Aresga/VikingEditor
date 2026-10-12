@@ -62,6 +62,7 @@ For automated test commands and coverage, see [Automated tests](CONTRIBUTING.md#
   * View all supported Valheim skills.
   * Edit skill levels and experience.
   * Unlock skills that are not yet present on the character.
+  * Lock skills to clear their level and XP and remove them from the save. Locked skills cannot be edited and are skipped by Reset All and Maximize All.
   * Reset or maximize unlocked skills.
   * Supports both combat and non-combat skills.
 

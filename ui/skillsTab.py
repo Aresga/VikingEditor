@@ -369,75 +369,67 @@ class SkillsTab(QWidget):
             xp_spin
         )
 
-        if skill_data is not None:
-            status_widget = QLabel("UNLOCKED")
-            status_widget.setMinimumWidth(88)
-            status_widget.setMaximumWidth(88)
+        unlocked = skill_data is not None
+        status_button = QPushButton("Lock" if unlocked else "Unlock")
+        status_button.setCheckable(True)
+        status_button.setChecked(unlocked)
+        status_button.setFixedWidth(88)
+        status_button.setMinimumHeight(29)
+        status_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                color: #587544;
+                border: 1px solid #bfd2b2;
+                border-radius: 5px;
+                padding: 4px 12px;
+                font-size: 10px;
+                font-weight: 600;
+            }
 
-            status_widget.setAlignment(
-                Qt.AlignmentFlag.AlignCenter
-            )
+            QPushButton:checked {
+                background-color: #edf6e7;
+                color: #55743e;
+                border-color: #c9dfba;
+            }
 
-            status_widget.setStyleSheet("""
-                QLabel {
-                    background-color: #edf6e7;
-                    color: #55743e;
-                    border: 1px solid #c9dfba;
-                    border-radius: 5px;
-                    padding: 4px 9px;
-                    font-size: 9px;
-                    font-weight: 700;
-                }
-            """)
+            QPushButton:hover {
+                background-color: #f2f8ee;
+                border-color: #9fbd8d;
+            }
 
-            self.table.setCellWidget(
-                row,
-                3,
-                status_widget
-            )
+            QPushButton:pressed {
+                background-color: #e8f1e2;
+            }
+        """)
+        status_button.setToolTip(
+            "Unlocked: lock to remove this skill and clear its level and XP."
+            if unlocked else "Locked: unlock at level 1 with zero XP."
+        )
+        status_button.toggled.connect(
+            lambda checked, r=row: self._on_skill_toggled(r, checked)
+        )
+        self.table.setCellWidget(row, 3, status_button)
+        level_spin.setEnabled(unlocked)
+        xp_spin.setEnabled(unlocked)
 
-        else:
-            unlock_button = QPushButton("Unlock")
-            unlock_button.setMinimumWidth(88)
-            unlock_button.setMaximumWidth(88)
-            unlock_button.setMinimumHeight(29)
+    def is_skill_unlocked(self, row):
+        status_button = self.table.cellWidget(row, 3)
+        return isinstance(status_button, QPushButton) and status_button.isChecked()
 
-            unlock_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #ffffff;
-                    color: #587544;
-                    border: 1px solid #bfd2b2;
-                    border-radius: 5px;
-                    padding: 4px 12px;
-                    font-size: 10px;
-                    font-weight: 600;
-                }
+    def _on_skill_toggled(self, row, unlocked):
+        level_widget = self.table.cellWidget(row, 1)
+        xp_widget = self.table.cellWidget(row, 2)
+        status_button = self.table.cellWidget(row, 3)
 
-                QPushButton:hover {
-                    background-color: #f2f8ee;
-                    border-color: #9fbd8d;
-                    color: #4d6d39;
-                }
-
-                QPushButton:pressed {
-                    background-color: #e8f1e2;
-                }
-            """)
-
-            unlock_button.clicked.connect(
-                lambda checked=False,
-                r=row: self.unlock_skill(r)
-            )
-
-            self.table.setCellWidget(
-                row,
-                3,
-                unlock_button
-            )
-
-            level_spin.setEnabled(False)
-            xp_spin.setEnabled(False)
-
+        level_widget.setValue(1.0 if unlocked else 0.0)
+        xp_widget.setValue(0.0)
+        level_widget.setEnabled(unlocked)
+        xp_widget.setEnabled(unlocked)
+        status_button.setText("Lock" if unlocked else "Unlock")
+        status_button.setToolTip(
+            "Unlocked: lock to remove this skill and clear its level and XP."
+            if unlocked else "Locked: unlock at level 1 with zero XP."
+        )
 
     def style_spinbox(self, widget):
         widget.setStyleSheet("""
@@ -482,45 +474,12 @@ class SkillsTab(QWidget):
         """)
 
     def unlock_skill(self, row):
-        if row < 0 or row >= self.table.rowCount():
-            return
+        if 0 <= row < self.table.rowCount():
+            self.table.cellWidget(row, 3).setChecked(True)
 
-        level_widget = self.table.cellWidget(row, 1)
-        xp_widget = self.table.cellWidget(row, 2)
-
-        if isinstance(level_widget, QDoubleSpinBox):
-            level_widget.setEnabled(True)
-            level_widget.setValue(1.0)
-
-        if isinstance(xp_widget, QDoubleSpinBox):
-            xp_widget.setEnabled(True)
-            xp_widget.setValue(0.0)
-
-        status_widget = QLabel("UNLOCKED")
-
-        status_widget.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
-        )
-
-        status_widget.setStyleSheet("""
-            QLabel {
-                background-color: #edf6e7;
-                color: #55743e;
-                border: 1px solid #c9dfba;
-                border-radius: 5px;
-                padding: 4px 9px;
-                font-size: 9px;
-                font-weight: 700;
-            }
-        """)
-
-        self.table.removeCellWidget(row, 3)
-
-        self.table.setCellWidget(
-            row,
-            3,
-            status_widget
-        )
+    def lock_skill(self, row):
+        if 0 <= row < self.table.rowCount():
+            self.table.cellWidget(row, 3).setChecked(False)
 
     def maximize_all_skills(self):
         for row in range(self.table.rowCount()):
@@ -528,7 +487,7 @@ class SkillsTab(QWidget):
 
             if (
                 isinstance(level_widget, QDoubleSpinBox)
-                and level_widget.isEnabled()
+                and self.is_skill_unlocked(row)
             ):
                 level_widget.setValue(100.0)
 
@@ -538,12 +497,12 @@ class SkillsTab(QWidget):
 
             if (
                 isinstance(level_widget, QDoubleSpinBox)
-                and level_widget.isEnabled()
+                and self.is_skill_unlocked(row)
             ):
                 level_widget.setValue(0.0)
 
     def save_changes(self):
-        if not self.player_data:
+        if self.player_data is None:
             return
 
         updated_skills = []
@@ -569,7 +528,7 @@ class SkillsTab(QWidget):
                 continue
 
             # Locked skills are not written to the save.
-            if not level_widget.isEnabled():
+            if not self.is_skill_unlocked(row):
                 continue
 
             skill_id = skill_item.data(

@@ -321,3 +321,143 @@ class SkillsTests(QtTestCase):
         tab.set_all_skills0()
         tab.save_changes()
         self.assertEqual(self.data["skills"], [{"id": 1, "level": 0, "xp": 3}])
+
+    def test_lock_button_clears_disables_and_removes_only_selected_skill(self):
+        self.data["skills"] = [
+            {"id": 1, "level": 12.5, "xp": 3.25},
+            {"id": 2, "level": 0, "xp": 0},
+        ]
+        before = deepcopy(self.data)
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        button = tab.table.cellWidget(0, 3)
+        self.assertEqual(button.text(), "Lock")
+        QTest.mouseClick(button, Qt.LeftButton)
+        self.assertEqual(button.text(), "Unlock")
+        self.assertFalse(button.isChecked())
+        for column in (1, 2):
+            spin = tab.table.cellWidget(0, column)
+            self.assertFalse(spin.isEnabled())
+            self.assertEqual(spin.value(), 0)
+        self.assertEqual(self.data, before)
+        tab.save_changes()
+        self.assertEqual(self.data["skills"], [before["skills"][1]])
+        self.assertEqual(
+            {k: v for k, v in self.data.items() if k != "skills"},
+            {k: v for k, v in before.items() if k != "skills"},
+        )
+
+    def test_repeated_unlock_lock_cycles_start_fresh(self):
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        for _ in range(3):
+            button = tab.table.cellWidget(0, 3)
+            QTest.mouseClick(button, Qt.LeftButton)
+            self.assertEqual(button.text(), "Lock")
+            for column, value in ((1, 1), (2, 0)):
+                spin = tab.table.cellWidget(0, column)
+                self.assertTrue(spin.isEnabled())
+                self.assertEqual(spin.value(), value)
+            tab.table.cellWidget(0, 1).setValue(42)
+            tab.table.cellWidget(0, 2).setValue(9)
+            tab.save_changes()
+            self.assertEqual(self.data["skills"], [{"id": 1, "level": 42, "xp": 9}])
+            QTest.mouseClick(button, Qt.LeftButton)
+            tab.save_changes()
+            self.assertEqual(self.data["skills"], [])
+            self.app.processEvents()
+
+    def test_bulk_actions_skip_newly_locked_skills(self):
+        self.data["skills"] = [
+            {"id": 1, "level": 12, "xp": 3},
+            {"id": 2, "level": 20, "xp": 4},
+        ]
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        tab.table.cellWidget(0, 3).click()
+        for button, level in ((tab.btn_max_all, 100), (tab.btn_set_all0, 0)):
+            button.click()
+            tab.save_changes()
+            self.assertEqual(self.data["skills"], [{"id": 2, "level": level, "xp": 4}])
+            self.assertEqual(tab.table.cellWidget(0, 1).value(), 0)
+            self.assertEqual(tab.table.cellWidget(0, 2).value(), 0)
+            self.assertFalse(tab.table.cellWidget(0, 1).isEnabled())
+
+    def test_lock_persists_through_character_file_round_trip(self):
+        from contextlib import redirect_stdout
+        import io
+        import json
+        from pathlib import Path
+        import tempfile
+        from tests.support import playerDataUtil as player
+        from subscripts.fchUtil import compile_fch, decompile_fch
+
+        self.data["skills"] = [{"id": 1, "level": 12.5, "xp": 3.25}]
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        tab.table.cellWidget(0, 3).click()
+        tab.table.cellWidget(1, 3).click()
+        tab.table.cellWidget(1, 1).setValue(25.5)
+        tab.table.cellWidget(1, 2).setValue(7.25)
+        tab.save_changes()
+        self.root["player_data_hex"] = player.pack_player_data_hex(self.data)
+        with tempfile.TemporaryDirectory() as directory, redirect_stdout(io.StringIO()):
+            source = Path(directory) / "source.json"
+            target = Path(directory) / "character.fch"
+            source.write_text(json.dumps(self.root), encoding="utf-8")
+            compile_fch(str(source), str(target))
+            loaded = player.unpack_player_data_hex(decompile_fch(str(target))["player_data_hex"])
+        self.assertEqual(loaded["skills"], [{"id": 2, "level": 25.5, "xp": 7.25}])
+        tab.load_data(loaded)
+        self.assertEqual(tab.table.cellWidget(0, 3).text(), "Unlock")
+        self.assertFalse(tab.table.cellWidget(0, 1).isEnabled())
+        self.assertEqual(tab.table.cellWidget(1, 3).text(), "Lock")
+        self.assertEqual(tab.table.cellWidget(1, 1).value(), 25.5)
+        self.assertEqual(tab.table.cellWidget(1, 2).value(), 7.25)
+
+    def test_switching_characters_resets_lock_state_and_button_connections(self):
+        tab = self.widget(SkillsTab)
+        self.data["skills"] = [{"id": 1, "level": 12, "xp": 3}]
+        for _ in range(3):
+            tab.load_data(self.data)
+            tab.table.cellWidget(0, 3).click()
+            replacement = create_empty_player_data()
+            tab.load_data(replacement)
+            self.app.processEvents()
+            tab.table.cellWidget(1, 3).click()
+            tab.save_changes()
+            self.assertEqual(replacement["skills"], [{"id": 2, "level": 1, "xp": 0}])
+            self.assertEqual(self.data["skills"], [{"id": 1, "level": 12, "xp": 3}])
+
+    def test_disabled_tab_does_not_change_saved_lock_state(self):
+        self.data["skills"] = [{"id": 1, "level": 0, "xp": 0}]
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        tab.setEnabled(False)
+        tab.save_changes()
+        self.assertEqual(self.data["skills"], [{"id": 1, "level": 0, "xp": 0}])
+
+    def test_unlock_from_empty_dictionary_is_saved(self):
+        data = {}
+        tab = self.widget(SkillsTab)
+        tab.load_data(data)
+        tab.unlock_skill(0)
+        tab.save_changes()
+        self.assertEqual(data["skills"], [{"id": 1, "level": 1, "xp": 0}])
+
+    def test_lock_and_unlock_methods_are_idempotent_and_ignore_invalid_rows(self):
+        tab = self.widget(SkillsTab)
+        tab.load_data(self.data)
+        for row in (-1, tab.table.rowCount()):
+            tab.lock_skill(row)
+            tab.unlock_skill(row)
+        tab.unlock_skill(0)
+        tab.table.cellWidget(0, 1).setValue(15)
+        tab.table.cellWidget(0, 2).setValue(5)
+        tab.unlock_skill(0)
+        tab.save_changes()
+        self.assertEqual(self.data["skills"], [{"id": 1, "level": 15, "xp": 5}])
+        tab.lock_skill(0)
+        tab.lock_skill(0)
+        tab.save_changes()
+        self.assertEqual(self.data["skills"], [])
