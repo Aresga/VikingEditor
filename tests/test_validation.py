@@ -53,6 +53,15 @@ class ItemValidationTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertFalse(is_valid_item(self.item(**{field: value})))
 
+    def test_crafter_id_signed_64_bit_limits(self):
+        for value in (-(2**63), 0, 9007199254740993, 2**63 - 1):
+            with self.subTest(valid=value):
+                self.assertTrue(is_valid_item(self.item(crafter_id=value)))
+        for value in (-(2**63) - 1, 2**63):
+            with self.subTest(invalid=value):
+                self.assertIn("Crafter ID must fit in a signed 64-bit integer.",
+                              validate_item(self.item(crafter_id=value)))
+
     def test_collects_multiple_errors(self):
         self.assertGreaterEqual(len(validate_item(self.item(prefab="", stack=0, cheated=1))), 3)
 

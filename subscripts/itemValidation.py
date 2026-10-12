@@ -110,6 +110,8 @@ def validate_item(item, player_data=None):
 
     if not isinstance(crafter_id, int) or isinstance(crafter_id, bool):
         errors.append("Crafter ID must be an integer.")
+    elif not -(2**63) <= crafter_id <= 2**63 - 1:
+        errors.append("Crafter ID must fit in a signed 64-bit integer.")
 
     # Crafter name
     crafter_name = item.get("crafter_name", "")

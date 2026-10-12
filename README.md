@@ -49,6 +49,7 @@ For automated test commands and coverage, see [Automated tests](CONTRIBUTING.md#
 
   * Edit items in your character's inventory.
   * Modify stack sizes, durability, quality, variants, equipped state, and other supported item data.
+  * Edit **Crafted by** names and character IDs in the item editor. Renaming preserves the existing ID; uncheck **Crafted by** to remove attribution. Adding attribution requires a nonzero crafter character ID. Apply the item, then save the character to write the changes to the `.fch` file.
   * Search and select items using the integrated item database.
   * Browse icon previews in the item editor, search multiple words in any order, and preview style variants before applying changes. Custom prefab IDs can still be entered directly.
   * Supports custom item data and Valheim item metadata.

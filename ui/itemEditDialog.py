@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QDialogButtonBox, QMessageBox, QHBoxLayout, QVBoxLayout,
-    QGroupBox, QLabel, QScrollArea, QWidget, QFrame,
+    QGroupBox, QLabel, QLineEdit, QScrollArea, QWidget, QFrame,
 )
 
 from ui.itemSearchWidget import ItemSearchWidget, display_name, item_icon
@@ -74,6 +74,7 @@ class ItemEditDialog(QDialog):
         self.preview_summary = QLabel()
         self.preview_summary.setAlignment(Qt.AlignCenter)
         self.preview_summary.setWordWrap(True)
+        self.preview_summary.setTextFormat(Qt.PlainText)
         self.preview_summary.setObjectName("pageDescription")
         preview_layout.addWidget(self.preview_summary)
         right.addWidget(preview)
@@ -103,6 +104,23 @@ class ItemEditDialog(QDialog):
         form.addRow(self.equipped_input)
         form.addRow(self.cheated_input)
         right.addWidget(properties)
+
+        self.crafter_group = QGroupBox("Crafted by")
+        self.crafter_group.setCheckable(True)
+        self.crafter_group.setChecked(item_data.get("crafter_id", 0) != 0)
+        self.crafter_group.setToolTip("Uncheck to remove crafting attribution from this item.")
+        crafter_form = QFormLayout(self.crafter_group)
+        self.crafter_name_input = QLineEdit(item_data.get("crafter_name", ""))
+        self.crafter_name_input.setPlaceholderText("Crafter name")
+        # QSpinBox is limited to 32 bits; keep character IDs as exact integers.
+        self.crafter_id_input = QLineEdit(str(item_data.get("crafter_id", 0)))
+        self.crafter_id_input.setToolTip(
+            "The crafter's character ID. Keep the existing ID when only renaming. "
+            "A nonzero ID is required to save crafting attribution."
+        )
+        crafter_form.addRow("Name", self.crafter_name_input)
+        crafter_form.addRow("Character ID", self.crafter_id_input)
+        right.addWidget(self.crafter_group)
         right.addStretch()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -127,6 +145,8 @@ class ItemEditDialog(QDialog):
         self.prefab_input.prefabChanged.connect(self.update_preview)
         for spin in (self.stack_input, self.quality_input, self.variant_input):
             spin.valueChanged.connect(self.update_preview)
+        self.crafter_name_input.textChanged.connect(self.update_preview)
+        self.crafter_group.toggled.connect(self.update_preview)
         self.update_preview()
         self.prefab_input.search.setFocus()
 
@@ -139,15 +159,22 @@ class ItemEditDialog(QDialog):
             self.preview_icon.setPixmap(icon.pixmap(80, 80))
         else:
             self.preview_icon.setText("—")
-        self.preview_summary.setText(
+        summary = (
             f"Quantity {self.stack_input.value()}  ·  Quality {self.quality_input.value()}\n"
             f"Style variant {self.variant_input.value()}"
         )
+        if self.crafter_group.isChecked():
+            summary += f"\nCrafted by {self.crafter_name_input.text()}"
+        self.preview_summary.setText(summary)
         self.apply_button.setEnabled(bool(prefab))
 
     def validate_and_accept(self):
         item = self.item_data.copy()
-        item.update(self.get_updated_data())
+        try:
+            item.update(self.get_updated_data())
+        except ValueError as error:
+            QMessageBox.warning(self, "Invalid Item", str(error))
+            return
         errors = validate_item(item, {"uniques": [f"invrows {self.inventory_rows}"]})
         if errors:
             QMessageBox.warning(self, "Invalid Item", "The item contains invalid data:\n\n" + "\n".join(errors))
@@ -155,6 +182,19 @@ class ItemEditDialog(QDialog):
         self.accept()
 
     def get_updated_data(self):
+        crafter_id = 0
+        crafter_name = ""
+        if self.crafter_group.isChecked():
+            text = self.crafter_id_input.text().strip()
+            if not re.fullmatch(r"[+-]?[0-9]+", text):
+                raise ValueError("Crafter ID must be a whole number.")
+            crafter_id = int(text)
+            if crafter_id == 0:
+                raise ValueError(
+                    "Enter a nonzero crafter character ID, or uncheck Crafted by "
+                    "to remove crafting attribution."
+                )
+            crafter_name = self.crafter_name_input.text()
         return {
             "prefab": self.prefab_input.get_prefab(),
             "stack": self.stack_input.value(),
@@ -163,4 +203,6 @@ class ItemEditDialog(QDialog):
             "variant": self.variant_input.value(),
             "equipped": self.equipped_input.isChecked(),
             "cheated": self.cheated_input.isChecked(),
+            "crafter_id": crafter_id,
+            "crafter_name": crafter_name,
         }
