@@ -6,9 +6,6 @@ import io
 import tempfile
 from functools import lru_cache
 
-import UnityPy
-from UnityPy.enums import ClassIDType
-
 # LOCALAPPDATA on Windows, XDG config directory elsewhere.
 # Same formula as VALHEIM_CONFIG_PATH; duplicated so that subscripts
 # stays free of any ui import.
@@ -231,6 +228,17 @@ def find_valheim_bundles(valheim_dir):
 
 
 def update_item_database(valheim_dir, progress_callback=None, cancel_callback=None):
+    # UnityPy is only needed for game-file extraction; importing it lazily
+    # keeps the editor and CLI usable without it for normal save editing.
+    try:
+        import UnityPy
+        from UnityPy.enums import ClassIDType
+    except ImportError:
+        raise RuntimeError(
+            "UnityPy is required to update the item database. "
+            "Install it with: pip install UnityPy"
+        )
+
     bundle_files = find_valheim_bundles(valheim_dir)
 
     if bundle_files is None:

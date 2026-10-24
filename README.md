@@ -273,6 +273,52 @@ VikingEditor does **not** modify the original save file when you save your chang
 
 ---
 
+## CLI (No GUI)
+
+VikingEditor also ships a command-line interface with the same save-format engine and no PySide6 dependency. Run it from the repository root:
+
+```bash
+python cli.py --help
+```
+
+### Common examples
+
+```bash
+# Summary of a save file (stats, skills, inventory)
+python cli.py info characters/Erik.fch
+
+# List character saves detected in Valheim's save directory
+python cli.py characters
+
+# Create a fresh character
+python cli.py new MyViking
+
+# Lossless round trip through editable JSON
+python cli.py export characters/Erik.fch erik.json
+python cli.py build erik.json Erik.fch
+
+# Editing commands (leave out -o to edit the file in place;
+# automatic backups follow the GUI's configured settings)
+python cli.py rename Erik.fch ErikTheBold
+python cli.py set-stat Erik.fch max_health 120
+python cli.py set-skill Erik.fch Swords 85 --xp 10
+python cli.py max-skills Erik.fch --all
+python cli.py add-item Erik.fch SwordIron --quality 3
+python cli.py add-item Erik.fch Wood --stack 500
+python cli.py remove-item Erik.fch 2,1
+python cli.py clear-cheated Erik.fch
+python cli.py set-cheats Erik.fch false
+
+# Rebuild the item database from installed game files once, so
+# prefab names resolve instead of showing "?"
+python cli.py update-items /path/to/Valheim
+python cli.py search-items sword
+```
+
+Item prefab names (`add-item`, `remove-item`, `list-items`) resolve using the same item database as the GUI. Without it, items still save correctly by hash, but the CLI displays a `?` for the name.
+
+---
+
 ## Creating a New Character
 
 VikingEditor can create a brand-new Valheim character without first having an existing `.fch` file.
@@ -394,6 +440,7 @@ VikingEditor/
 │   └── worldsTab.py
 │
 ├── main.py
+├── cli.py
 ├── LICENSE
 ├── NOTICE
 ├── README.md
@@ -403,6 +450,7 @@ VikingEditor/
 ### Key Components
 
 * `main.py` — Application entry point.
+* `cli.py` — Command-line interface for saving, editing, and creating characters without a GUI.
 * `ui/mainWindow.py` — Main application window and save/load controller.
 * `ui/inventoryTab.py` — Inventory editor.
 * `ui/skillsTab.py` — Skills editor.

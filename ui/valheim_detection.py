@@ -1,9 +1,11 @@
 import os
 import re
-import psutil
 import json
 from pathlib import Path
 from typing import Optional
+
+# psutil is only needed to detect a running Valheim process and is
+# imported lazily inside those helpers.
 
 # LOCALAPPDATA on Windows, XDG config directory elsewhere.
 VALHEIM_CONFIG_PATH = (
@@ -23,6 +25,8 @@ DEFAULT_CONFIG = {
 
 def is_valheim_running() -> bool:
     try:
+        import psutil
+
         processes = psutil.process_iter(['pid', 'name', 'exe'])
 
         for proc in processes:
@@ -47,6 +51,8 @@ def is_valheim_running() -> bool:
 
 def get_valheim_process_info() -> Optional[dict]:
     try:
+        import psutil
+
         processes = psutil.process_iter(
             ['pid', 'name', 'exe', 'cmdline']
         )
